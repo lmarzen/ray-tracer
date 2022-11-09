@@ -1,0 +1,5 @@
+.vscode
+raytracer_sequential
+raytracer_openmp
+raytracer_mpi
+*.ppm
