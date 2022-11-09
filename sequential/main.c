@@ -8,7 +8,7 @@ typedef struct vec3
   float x;
   float y;
   float z;
-} __attribute__((packed)) vec3;
+} vec3;
 
 inline vec3 vec3_sub(const vec3 *a, const vec3 *b)
 {
@@ -277,23 +277,28 @@ int main(int argc, char *argv[])
 
   const int width = user_width;
   const int height = user_height;
-  const int buf_size = width * height;
+  const int pixel_count = width * height;
+  const int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
-  vec3 *framebuffer = malloc(buf_size * sizeof(vec3));
+  unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
   vec3 origin = (vec3){0.f, 0.f, 0.f};
 
   struct timeval start, end;
   double time_taken = 0;
   gettimeofday(&start, NULL); // start timer
 
-  for (int pix = 0; pix < buf_size; ++pix)
+  for (int pix = 0; pix < pixel_count; ++pix)
   {
     vec3 dir;
     dir.x = (pix % width + .5f) - width / 2.f;
-    dir.y = -(pix / width + .5f) + height / 2.f; // this flips the image at the same time
+    dir.y = -(pix / width + .5f) + height / 2.f;
     dir.z = -height / (2.f * tanf(fov / 2.f));
     vec3_normalize(&dir);
-    framebuffer[pix] = cast_ray(&origin, &dir, 0);
+    vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
+    float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
+    framebuffer[pix * 3    ] = (unsigned char)(255 * rgb.x / max); // red
+    framebuffer[pix * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
+    framebuffer[pix * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
   }
 
   gettimeofday(&end, NULL); // stop timer
@@ -304,16 +309,7 @@ int main(int argc, char *argv[])
   // write framebuffer to output file.
   FILE *fp = fopen("output.ppm", "wb");
   fprintf(fp, "P6\n%d %d\n255\n", width, height);
-    for (int i = 0; i < buf_size; ++i) //vec3 &color : framebuffer)
-    {
-      float max = fmax(1.f, fmax(framebuffer[i].x, 
-                                   fmax(framebuffer[i].y, framebuffer[i].z)));
-      static unsigned char color[3];
-      color[0] = (char)(255 * framebuffer[i].x / max); // red
-      color[1] = (char)(255 * framebuffer[i].y / max); // green
-      color[2] = (char)(255 * framebuffer[i].z / max); // blue
-      fwrite(color, 1, 3 * sizeof(char), fp);
-  }
+  fwrite(framebuffer, buf_size * sizeof(unsigned char), 1, fp);
   fclose(fp);
 
   free(framebuffer);
