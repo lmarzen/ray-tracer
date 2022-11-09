@@ -1,14 +1,16 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
+#include <mpi.h>
 
 typedef struct vec3
 {
   float x;
   float y;
   float z;
-} __attribute__((packed)) vec3;
+} vec3;
 
 inline vec3 vec3_sub(const vec3 *a, const vec3 *b)
 {
@@ -259,69 +261,111 @@ void usage(const char *prog_name)
 
 int main(int argc, char *argv[])
 {
-  if (argc != 1 && argc != 4)
-  {
-    usage(argv[0]);
-  }
+  // Setup MPI
+  int comm_sz, my_rank;
+  MPI_Init(NULL, NULL);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
   // default options
   int user_width = 3840; //7680; //3840; //1920;
   int user_height = 2160; //4320; //2160; //1080;
-  int user_thread_count = omp_get_num_threads();
-  if (argc == 4)
+
+  if (my_rank == 0)
   {
-    user_width = atoi(argv[1]);
-    user_height = atoi(argv[2]);
-    user_thread_count = atoi(argv[3]);
+    if (argc != 1 && argc != 3)
+    {
+      usage(argv[0]);
+    }
+    if (argc == 3)
+    {
+      user_width = atoi(argv[1]);
+      user_height = atoi(argv[2]);
+    }
+    if (user_width < 1 || user_height < 1)
+    {
+      usage(argv[0]);
+    }
+
+    for (int i = 1; i < comm_sz; ++i)
+    {
+      MPI_Send(&user_width, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+      MPI_Send(&user_height, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+    }
   }
-  if (user_width < 1 || user_height < 1 || user_thread_count < 1)
+  else
   {
-    usage(argv[0]);
+    MPI_Recv(&user_width, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&user_height, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   }
 
-  const int thread_count = user_thread_count;
   const int width = user_width;
   const int height = user_height;
-  const int buf_size = width * height;
+  const int pixel_count = width * height;
+  const int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
-  vec3 *framebuffer = malloc(buf_size * sizeof(vec3));
+  unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
   vec3 origin = (vec3){0.f, 0.f, 0.f};
 
   struct timeval start, end;
-  double time_taken = 0;
-  gettimeofday(&start, NULL); // start timer
+  double time_taken = 0.0;
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (my_rank == 0)
+  {
+    gettimeofday(&start, NULL); // start timer
+  }
 
-  #pragma omp parallel for
-  for (int pix = 0; pix < buf_size; ++pix)
+  int local_buf_sz = buf_size / comm_sz;
+  unsigned char* local_buf = (unsigned char*)malloc(local_buf_sz);
+  int local_index = 0;
+
+  for (int pix = my_rank * pixel_count / comm_sz; pix <  (my_rank + 1) * pixel_count / comm_sz; ++pix)
   {
     vec3 dir;
     dir.x = (pix % width + .5f) - width / 2.f;
-    dir.y = -(pix / width + .5f) + height / 2.f; // this flips the image at the same time
+    dir.y = -(pix / width + .5f) + height / 2.f;
     dir.z = -height / (2.f * tanf(fov / 2.f));
     vec3_normalize(&dir);
-    framebuffer[pix] = cast_ray(&origin, &dir, 0);
+    vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
+    float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
+    local_buf[local_index * 3    ] = (unsigned char)(255 * rgb.x / max); // red
+    local_buf[local_index * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
+    local_buf[local_index * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
+    ++local_index;
   }
 
-  gettimeofday(&end, NULL); // stop timer
-  time_taken = end.tv_sec * 1e3 + end.tv_usec / 1e3 -
-               start.tv_sec * 1e3 - start.tv_usec / 1e3; // in ms
-  printf("Execution Time: %dms\n", (int) time_taken);
-
-  // write framebuffer to output file.
-  FILE *fp = fopen("output.ppm", "wb");
-  fprintf(fp, "P6\n%d %d\n255\n", width, height);
-    for (int i = 0; i < buf_size; ++i) //vec3 &color : framebuffer)
+  // Add local results to the global result on Processor 0
+  if (my_rank != 0)
+  {
+    MPI_Send(local_buf, local_buf_sz, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+  }
+  else
+  {
+    memcpy(framebuffer, local_buf, local_buf_sz);
+    for (int i = 1; i < comm_sz; ++i)
     {
-      float max = fmax(1.f, fmax(framebuffer[i].x, 
-                                   fmax(framebuffer[i].y, framebuffer[i].z)));
-      static unsigned char color[3];
-      color[0] = (char)(255 * framebuffer[i].x / max); // red
-      color[1] = (char)(255 * framebuffer[i].y / max); // green
-      color[2] = (char)(255 * framebuffer[i].z / max); // blue
-      fwrite(color, 1, 3 * sizeof(char), fp);
+      MPI_Recv(local_buf, local_buf_sz, MPI_CHAR, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      memcpy(framebuffer + i * local_buf_sz * sizeof(char), local_buf, local_buf_sz);
+    }
   }
-  fclose(fp);
 
-  free(framebuffer);
+  if (my_rank == 0)
+  {
+    gettimeofday(&end, NULL); // stop timer
+    time_taken = end.tv_sec * 1e3 + end.tv_usec / 1e3 -
+                start.tv_sec * 1e3 - start.tv_usec / 1e3; // in ms
+    printf("Execution Time: %dms\n", (int) time_taken);
+
+    // write framebuffer to output file.
+    FILE *fp = fopen("output.ppm", "wb");
+    fprintf(fp, "P6\n%d %d\n255\n", width, height);
+    fwrite(framebuffer, buf_size * sizeof(unsigned char), 1, fp);
+    fclose(fp);
+
+    free(framebuffer);
+  }
+
+  MPI_Finalize();
 
   return 0;
 }
