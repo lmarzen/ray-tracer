@@ -201,7 +201,7 @@ scene_hit scene_intersect(const vec3 *orig, const vec3 *dir)
 vec3 cast_ray(const vec3 *orig, const vec3 *dir, const int depth)
 {
   scene_hit r = scene_intersect(orig, dir);
-  if (depth > 4 || !r.hit)
+  if (depth > 6 || !r.hit)
   {
     return (vec3){0.54, 0.81, 0.94}; // background color
   }
@@ -251,10 +251,10 @@ vec3 cast_ray(const vec3 *orig, const vec3 *dir, const int depth)
 
 void usage(const char *prog_name)
 {
-  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT> <N>\n", prog_name);
-  fprintf(stderr, "  WIDTH   horizontal resolution\n");
-  fprintf(stderr, "  HEIGHT  vertical resolution\n");
-  fprintf(stderr, "  N       number of processors\n");
+  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT> <NUM_THREADS>\n", prog_name);
+  fprintf(stderr, "  WIDTH        horizontal resolution\n");
+  fprintf(stderr, "  HEIGHT       vertical resolution\n");
+  fprintf(stderr, "  NUM_THREADS  number of processors\n");
   exit(1);
 }
 
