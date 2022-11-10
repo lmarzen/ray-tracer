@@ -252,10 +252,10 @@ vec3 cast_ray(const vec3 *orig, const vec3 *dir, const int depth)
 
 void usage(const char *prog_name)
 {
-  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT> <N>\n", prog_name);
-  fprintf(stderr, "  WIDTH   horizontal resolution\n");
-  fprintf(stderr, "  HEIGHT  vertical resolution\n");
-  fprintf(stderr, "  N       number of processors\n");
+  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT> <NUM_REGIONS>\n", prog_name);
+  fprintf(stderr, "  WIDTH        horizontal resolution\n");
+  fprintf(stderr, "  HEIGHT       vertical resolution\n");
+  fprintf(stderr, "  NUM_REGIONS  number of regions to divide the render into\n");
   exit(1);
 }
 
@@ -270,19 +270,21 @@ int main(int argc, char *argv[])
   // default options
   int user_width = 3840; //7680; //3840; //1920;
   int user_height = 2160; //4320; //2160; //1080;
+  int user_num_regions = 256;
 
   if (my_rank == 0)
   {
-    if (argc != 1 && argc != 3)
+    if (argc != 1 && argc != 4)
     {
       usage(argv[0]);
     }
-    if (argc == 3)
+    if (argc == 4)
     {
       user_width = atoi(argv[1]);
       user_height = atoi(argv[2]);
+      user_num_regions = atoi(argv[3]);
     }
-    if (user_width < 1 || user_height < 1)
+    if (user_width < 1 || user_height < 1 || user_num_regions < 1)
     {
       usage(argv[0]);
     }
@@ -291,12 +293,14 @@ int main(int argc, char *argv[])
     {
       MPI_Send(&user_width, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
       MPI_Send(&user_height, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+      MPI_Send(&user_num_regions, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
     }
   }
   else
   {
     MPI_Recv(&user_width, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(&user_height, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&user_num_regions, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   }
 
   const int width = user_width;
@@ -304,8 +308,13 @@ int main(int argc, char *argv[])
   const int pixel_count = width * height;
   const int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
-  unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
+  unsigned char *framebuffer = (unsigned char *) calloc(buf_size, sizeof(unsigned char));
   const vec3 origin = (vec3){0.f, 0.f, 0.f};
+
+  const int num_regions = user_num_regions;
+  const int pixels_per_region = pixel_count / num_regions;
+  const int bucket_size = pixels_per_region * 3;
+  int current_region = comm_sz - 1;
 
   struct timeval start, end;
   double time_taken = 0.0;
@@ -315,38 +324,81 @@ int main(int argc, char *argv[])
     gettimeofday(&start, NULL); // start timer
   }
 
-  int local_buf_sz = buf_size / comm_sz;
-  unsigned char* local_buf = (unsigned char*)malloc(local_buf_sz);
-  int local_index = 0;
+  MPI_Request request;
+  // each thread will start with the region that has index equal its rank.
+  // this avoids waiting for a critical section
+  int my_region = my_rank;
 
-  for (int pix = my_rank * pixel_count / comm_sz; pix <  (my_rank + 1) * pixel_count / comm_sz; ++pix)
+  if (my_region < num_regions)
   {
-    vec3 dir;
-    dir.x = (pix % width + .5f) - width / 2.f;
-    dir.y = -(pix / width + .5f) + height / 2.f;
-    dir.z = -height / (2.f * tanf(fov / 2.f));
-    vec3_normalize(&dir);
-    vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
-    float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
-    local_buf[local_index * 3    ] = (unsigned char)(255 * rgb.x / max); // red
-    local_buf[local_index * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
-    local_buf[local_index * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
-    ++local_index;
-  }
+    do
+    {
+      for (int pix = my_region * pixels_per_region; 
+            pix < (my_region + 1) * pixels_per_region; ++pix)
+      {
+        vec3 dir;
+        dir.x = (pix % width + .5f) - width / 2.f;
+        dir.y = -(pix / width + .5f) + height / 2.f;
+        dir.z = -height / (2.f * tanf(fov / 2.f));
+        vec3_normalize(&dir);
+        vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
+        float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
+        framebuffer[pix * 3    ] = (unsigned char)(255 * rgb.x / max); // red
+        framebuffer[pix * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
+        framebuffer[pix * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
+      }
+        printf("%d: %d\n", my_rank, current_region);
+
+      int tmp_region = 0;
+      for(int i = 0; i < comm_sz; ++i)
+      {
+        if (i != my_rank)
+        {
+          MPI_Irecv(&tmp_region, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &request);
+          if (tmp_region > current_region)
+          {
+            current_region = tmp_region;
+          }
+        }
+      }
+      ++current_region;
+      for(int i = 0; i < comm_sz; ++i)
+      {
+        if (i != my_rank)
+        {
+          MPI_Isend(&current_region, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &request);
+        }
+      }
+      my_region = current_region;
+
+      if (my_region >= num_regions)
+      {
+        break;
+      }
+    } while (1);
+  } // end if
 
   // Add local results to the global result on Processor 0
   if (my_rank != 0)
   {
-    MPI_Send(local_buf, local_buf_sz, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+    MPI_Send(framebuffer, buf_size, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
   }
   else
   {
-    memcpy(framebuffer, local_buf, local_buf_sz);
+    unsigned char *recv_buffer = (unsigned char *)calloc(buf_size, sizeof(unsigned char));
     for (int i = 1; i < comm_sz; ++i)
     {
-      MPI_Recv(local_buf, local_buf_sz, MPI_CHAR, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      memcpy(framebuffer + i * local_buf_sz * sizeof(char), local_buf, local_buf_sz);
+      MPI_Recv(recv_buffer, buf_size, MPI_CHAR, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+      for (int j = 0; j < buf_size; j += bucket_size)
+      {
+        if (!((recv_buffer[j] == 0) && (recv_buffer[j + 1] == 0) && (recv_buffer[j + 2] == 0)))
+        {
+          memcpy(framebuffer + j * sizeof(char), recv_buffer + j * sizeof(char), bucket_size * sizeof(unsigned char));
+        }
+      }
     }
+    free(recv_buffer);
   }
 
   if (my_rank == 0)
@@ -364,7 +416,6 @@ int main(int argc, char *argv[])
   }
 
   free(framebuffer);
-  free(local_buf);
   MPI_Finalize();
 
   return 0;

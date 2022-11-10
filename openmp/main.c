@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
   const int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
   unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
-  vec3 origin = (vec3){0.f, 0.f, 0.f};
+  const vec3 origin = (vec3){0.f, 0.f, 0.f};
 
   struct timeval start, end;
   double time_taken = 0;

@@ -319,7 +319,7 @@ int main(int argc, char *argv[])
           vec3_normalize(&dir);
           vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
           float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
-          framebuffer[pix * 3] = (unsigned char)(255 * rgb.x / max);     // red
+          framebuffer[pix * 3    ] = (unsigned char)(255 * rgb.x / max); // red
           framebuffer[pix * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
           framebuffer[pix * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
         }
