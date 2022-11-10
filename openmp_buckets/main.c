@@ -286,15 +286,15 @@ int main(int argc, char *argv[])
   const int thread_count = user_thread_count;
   const int width = user_width;
   const int height = user_height;
-  const int pixel_count = width * height;
-  const int buf_size = width * height * 3;
+  const unsigned int pixel_count = width * height;
+  const unsigned int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
   unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
   const vec3 origin = (vec3){0.f, 0.f, 0.f};
 
-  const int num_regions = user_num_regions;
-  const int pixels_per_region = pixel_count / num_regions;
-  int current_region = thread_count - 1;
+  const unsigned int num_regions = user_num_regions;
+  const unsigned int pixels_per_region = pixel_count / num_regions;
+  unsigned int current_region = thread_count - 1;
 
   struct timeval start, end;
   double time_taken = 0;
@@ -304,10 +304,10 @@ int main(int argc, char *argv[])
   {
     // each thread will start with the region that has index equal its rank.
     // this avoids waiting for a critical section at the start of the render.
-    int my_region = omp_get_thread_num();
+    unsigned int my_region = omp_get_thread_num();
     while (my_region < num_regions)
     {
-      for (int pix = my_region * pixels_per_region; 
+      for (unsigned int pix = my_region * pixels_per_region; 
             pix < (my_region + 1) * pixels_per_region; ++pix)
       {
         vec3 dir;

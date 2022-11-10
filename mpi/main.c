@@ -300,8 +300,8 @@ int main(int argc, char *argv[])
 
   const int width = user_width;
   const int height = user_height;
-  const int pixel_count = width * height;
-  const int buf_size = width * height * 3;
+  const unsigned int pixel_count = width * height;
+  const unsigned int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
   unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
   const vec3 origin = (vec3){0.f, 0.f, 0.f};
@@ -314,11 +314,11 @@ int main(int argc, char *argv[])
     gettimeofday(&start, NULL); // start timer
   }
 
-  int local_buf_sz = buf_size / comm_sz;
+  unsigned int local_buf_sz = buf_size / comm_sz;
   unsigned char* local_buf = malloc(local_buf_sz);
-  int local_index = 0;
+  unsigned int local_index = 0;
 
-  for (int pix = my_rank * pixel_count / comm_sz; pix <  (my_rank + 1) * pixel_count / comm_sz; ++pix)
+  for (unsigned int pix = my_rank * pixel_count / comm_sz; pix <  (my_rank + 1) * pixel_count / comm_sz; ++pix)
   {
     vec3 dir;
     dir.x = (pix % width + .5f) - width / 2.f;
@@ -341,7 +341,7 @@ int main(int argc, char *argv[])
   else
   {
     memcpy(framebuffer, local_buf, local_buf_sz);
-    for (int i = 1; i < comm_sz; ++i)
+    for (unsigned int i = 1; i < comm_sz; ++i)
     {
       MPI_Recv(local_buf, local_buf_sz, MPI_CHAR, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       memcpy(framebuffer + i * local_buf_sz * sizeof(char), local_buf, local_buf_sz);

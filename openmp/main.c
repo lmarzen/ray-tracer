@@ -282,8 +282,8 @@ int main(int argc, char *argv[])
   const int thread_count = user_thread_count;
   const int width = user_width;
   const int height = user_height;
-  const int pixel_count = width * height;
-  const int buf_size = width * height * 3;
+  const unsigned int pixel_count = width * height;
+  const unsigned int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
   unsigned char *framebuffer = malloc(buf_size * sizeof(unsigned char));
   const vec3 origin = (vec3){0.f, 0.f, 0.f};
@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
   gettimeofday(&start, NULL); // start timer
 
   #pragma omp parallel for num_threads(thread_count)
-  for (int pix = 0; pix < pixel_count; ++pix)
+  for (unsigned int pix = 0; pix < pixel_count; ++pix)
   {
     vec3 dir;
     dir.x = (pix % width + .5f) - width / 2.f;
