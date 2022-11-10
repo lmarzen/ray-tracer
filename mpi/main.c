@@ -252,10 +252,9 @@ vec3 cast_ray(const vec3 *orig, const vec3 *dir, const int depth)
 
 void usage(const char *prog_name)
 {
-  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT> <N>\n", prog_name);
+  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT>\n", prog_name);
   fprintf(stderr, "  WIDTH   horizontal resolution\n");
   fprintf(stderr, "  HEIGHT  vertical resolution\n");
-  fprintf(stderr, "  N       number of processors\n");
   exit(1);
 }
 
@@ -316,7 +315,7 @@ int main(int argc, char *argv[])
   }
 
   int local_buf_sz = buf_size / comm_sz;
-  unsigned char* local_buf = (unsigned char*)malloc(local_buf_sz);
+  unsigned char* local_buf = malloc(local_buf_sz);
   int local_index = 0;
 
   for (int pix = my_rank * pixel_count / comm_sz; pix <  (my_rank + 1) * pixel_count / comm_sz; ++pix)
