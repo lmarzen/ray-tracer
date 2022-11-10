@@ -303,38 +303,32 @@ int main(int argc, char *argv[])
 #pragma omp parallel num_threads(thread_count)
   {
     // each thread will start with the region that has index equal its rank.
-    // this avoids waiting for a critical section
+    // this avoids waiting for a critical section at the start of the render.
     int my_region = omp_get_thread_num();
-    if (my_region < num_regions)
+    while (my_region < num_regions)
     {
-      do
+      for (int pix = my_region * pixels_per_region; 
+            pix < (my_region + 1) * pixels_per_region; ++pix)
       {
-        for (int pix = my_region * pixels_per_region; 
-             pix < (my_region + 1) * pixels_per_region; ++pix)
-        {
-          vec3 dir;
-          dir.x = (pix % width + .5f) - width / 2.f;
-          dir.y = -(pix / width + .5f) + height / 2.f;
-          dir.z = -height / (2.f * tanf(fov / 2.f));
-          vec3_normalize(&dir);
-          vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
-          float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
-          framebuffer[pix * 3    ] = (unsigned char)(255 * rgb.x / max); // red
-          framebuffer[pix * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
-          framebuffer[pix * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
-        }
+        vec3 dir;
+        dir.x = (pix % width + .5f) - width / 2.f;
+        dir.y = -(pix / width + .5f) + height / 2.f;
+        dir.z = -height / (2.f * tanf(fov / 2.f));
+        vec3_normalize(&dir);
+        vec3 rgb = cast_ray(&origin, &dir, 0); // %rgb values
+        float max = fmax(1.f, fmax(rgb.x, fmax(rgb.y, rgb.z)));
+        framebuffer[pix * 3    ] = (unsigned char)(255 * rgb.x / max); // red
+        framebuffer[pix * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
+        framebuffer[pix * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
+      }
 
-        #pragma omp atomic update
+      #pragma omp critical
+      {
         ++current_region;
-        #pragma omp atomic read
         my_region = current_region;
+      }
 
-        if (my_region >= num_regions)
-        {
-          break;
-        }
-      } while (1);
-    } // end if
+    } // end while
   } // end #pragma omp parallel num_threads(thread_count)
 
   gettimeofday(&end, NULL); // stop timer

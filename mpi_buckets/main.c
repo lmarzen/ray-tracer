@@ -326,7 +326,7 @@ int main(int argc, char *argv[])
 
   MPI_Request request;
   // each thread will start with the region that has index equal its rank.
-  // this avoids waiting for a critical section
+  // this avoids waiting for a critical section at the start of the render.
   int my_region = my_rank;
 
   if (my_region < num_regions)
