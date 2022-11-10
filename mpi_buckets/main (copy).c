@@ -304,15 +304,15 @@ int main(int argc, char *argv[])
     MPI_Recv(&user_num_regions, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   }
 
-  const int width = user_width;
-  const int height = user_height;
+  const unsigned int width = user_width;
+  const unsigned int height = user_height;
   const unsigned int pixel_count = width * height;
   const unsigned int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
   unsigned char *framebuffer = (unsigned char *) calloc(buf_size, sizeof(unsigned char));
   const vec3 origin = (vec3){0.f, 0.f, 0.f};
 
-  const int num_regions = user_num_regions;
+  const unsigned int num_regions = user_num_regions;
   const unsigned int pixels_per_region = pixel_count / num_regions;
   const unsigned int bucket_size = pixels_per_region * 3;
   // this is a lookup array that will track which thread completed which bucket
@@ -334,6 +334,13 @@ int main(int argc, char *argv[])
     unsigned int my_region = my_rank - 1;
     while (my_region < num_regions)
     {
+              if (my_rank == 1) {
+        printf("%d: my_region=%d\n", my_rank, my_region);
+        printf("%d: pix=%d\n", my_rank, my_region * pixels_per_region);
+        printf("%d: end=%d\n", my_rank, (my_region + 1) * pixels_per_region);
+        
+
+        }
       for (unsigned int pix = my_region * pixels_per_region; 
             pix < (my_region + 1) * pixels_per_region; ++pix)
       {
@@ -370,6 +377,16 @@ int main(int argc, char *argv[])
       bucket_map[next_region] = recv_rank;
       ++next_region;
     }
+  }
+
+  // write results to file
+  if (my_rank == 1)
+  {
+    // write framebuffer to output file.
+    FILE *fp = fopen("output1.ppm", "wb");
+    fprintf(fp, "P6\n%d %d\n255\n", width, height);
+    fwrite(framebuffer, buf_size * sizeof(unsigned char), 1, fp);
+    fclose(fp);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
