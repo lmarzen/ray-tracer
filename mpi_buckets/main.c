@@ -314,7 +314,6 @@ int main(int argc, char *argv[])
   const int num_regions = user_num_regions;
   const int pixels_per_region = pixel_count / num_regions;
   const int bucket_size = pixels_per_region * 3;
-  int current_region = comm_sz - 1;
 
   struct timeval start, end;
   double time_taken = 0.0;
@@ -324,14 +323,13 @@ int main(int argc, char *argv[])
     gettimeofday(&start, NULL); // start timer
   }
 
-  MPI_Request request;
   // each thread will start with the region that has index equal its rank.
-  // this avoids waiting for a critical section at the start of the render.
-  int my_region = my_rank;
-
-  if (my_region < num_regions)
+  // the root thread will be a central communicator and will not perform any 
+  // rendering.
+  if (my_rank != 0)
   {
-    do
+    int my_region = my_rank - 1;
+    while (my_region < num_regions)
     {
       for (int pix = my_region * pixels_per_region; 
             pix < (my_region + 1) * pixels_per_region; ++pix)
@@ -347,37 +345,25 @@ int main(int argc, char *argv[])
         framebuffer[pix * 3 + 1] = (unsigned char)(255 * rgb.y / max); // green
         framebuffer[pix * 3 + 2] = (unsigned char)(255 * rgb.z / max); // blue
       }
-        printf("%d: %d\n", my_rank, current_region);
 
-      int tmp_region = 0;
-      for(int i = 0; i < comm_sz; ++i)
-      {
-        if (i != my_rank)
-        {
-          MPI_Irecv(&tmp_region, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &request);
-          if (tmp_region > current_region)
-          {
-            current_region = tmp_region;
-          }
-        }
-      }
-      ++current_region;
-      for(int i = 0; i < comm_sz; ++i)
-      {
-        if (i != my_rank)
-        {
-          MPI_Isend(&current_region, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &request);
-        }
-      }
-      my_region = current_region;
+      MPI_Send(&my_rank, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+      MPI_Recv(&my_region, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    } // end while
+  }
+  else
+  { // root thread is central communicator and will manage assigning each thread
+    // a bucket.
+    int next_region = comm_sz - 1;
+    unsigned int recv_rank = 0;
+    while (next_region < num_regions + comm_sz - 1)
+    {
+      MPI_Recv(&recv_rank, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Send(&next_region, 1, MPI_INT, recv_rank, 0, MPI_COMM_WORLD);
+      ++next_region;
+    }
+  }
 
-      if (my_region >= num_regions)
-      {
-        break;
-      }
-    } while (1);
-  } // end if
-
+  MPI_Barrier(MPI_COMM_WORLD);
   // Add local results to the global result on Processor 0
   if (my_rank != 0)
   {
