@@ -202,7 +202,7 @@ scene_hit scene_intersect(const vec3 *orig, const vec3 *dir)
 vec3 cast_ray(const vec3 *orig, const vec3 *dir, const int depth)
 {
   scene_hit r = scene_intersect(orig, dir);
-  if (depth > 4 || !r.hit)
+  if (depth > 6 || !r.hit)
   {
     return (vec3){0.54, 0.81, 0.94}; // background color
   }
@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
   {
     gettimeofday(&end, NULL); // stop timer
     time_taken = end.tv_sec * 1e3 + end.tv_usec / 1e3 -
-                start.tv_sec * 1e3 - start.tv_usec / 1e3; // in ms
+                 start.tv_sec * 1e3 - start.tv_usec / 1e3; // in ms
     printf("Execution Time: %dms\n", (int) time_taken);
 
     // write framebuffer to output file.
@@ -361,10 +361,10 @@ int main(int argc, char *argv[])
     fprintf(fp, "P6\n%d %d\n255\n", width, height);
     fwrite(framebuffer, buf_size * sizeof(unsigned char), 1, fp);
     fclose(fp);
-
-    free(framebuffer);
   }
 
+  free(framebuffer);
+  free(local_buf);
   MPI_Finalize();
 
   return 0;
