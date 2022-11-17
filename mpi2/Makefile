@@ -1,4 +1,4 @@
-CC = clang
+CC = gcc
 MPICC = mpicc
 CFLAGS = -Wall -O3 -lm -std=c99
 

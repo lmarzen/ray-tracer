@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
   const unsigned int pixel_count = width * height;
   const unsigned int buf_size = width * height * 3;
   const float fov = 1.0472; // 60 degrees field of view in radians
-  unsigned char *framebuffer = (unsigned char *) calloc(buf_size, sizeof(unsigned char));
+  unsigned char *framebuffer = calloc(buf_size, sizeof(unsigned char));
   const vec3 origin = (vec3){0.f, 0.f, 0.f};
 
   const int num_regions = user_num_regions;
@@ -420,6 +420,8 @@ int main(int argc, char *argv[])
     fwrite(framebuffer, buf_size * sizeof(unsigned char), 1, fp);
     fclose(fp);
   }
+  MPI_Barrier(MPI_COMM_WORLD);
+
 
   free(framebuffer);
   MPI_Finalize();
