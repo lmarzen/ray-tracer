@@ -250,7 +250,7 @@ vec3 cast_ray(const vec3 *orig, const vec3 *dir, const int depth)
 
 void usage(const char *prog_name)
 {
-  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT> <N>\n", prog_name);
+  fprintf(stderr, "usage: %s <WIDTH> <HEIGHT>\n", prog_name);
   fprintf(stderr, "  WIDTH   horizontal resolution\n");
   fprintf(stderr, "  HEIGHT  vertical resolution\n");
   exit(1);
