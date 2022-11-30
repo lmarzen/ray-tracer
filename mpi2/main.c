@@ -420,10 +420,9 @@ int main(int argc, char *argv[])
     fwrite(framebuffer, buf_size * sizeof(unsigned char), 1, fp);
     fclose(fp);
   }
-  MPI_Barrier(MPI_COMM_WORLD);
-
 
   free(framebuffer);
+  MPI_Barrier(MPI_COMM_WORLD);
   MPI_Finalize();
 
   return 0;
