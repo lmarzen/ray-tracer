@@ -104,16 +104,15 @@ vec3 refract(const vec3 *I, const vec3 *N, float eta_t, float eta_i)
     float eta = eta_t / eta_i;
     float k = 1.f - eta * eta * (1.f - cosi * cosi);
     float tmp = eta * cosi - sqrtf(k);
-    // k < 0 = total reflection, no ray to refract, return has no physical meaning.
-    return k < 0 ? (vec3){1.f, 0.f, 0.f} : (vec3){I->x * eta + N_neg.x * tmp, 
+    return k < 0 ? (vec3){0.f, 0.f, 0.f} : (vec3){I->x * eta + N_neg.x * tmp, 
                                                   I->y * eta + N_neg.y * tmp, 
                                                   I->z * eta + N_neg.z * tmp};
   }
   float eta = eta_i / eta_t;
   float k = 1.f - eta * eta * (1.f - cosi * cosi);
   float tmp = eta * cosi - sqrtf(k);
-  // k < 0 = total reflection, no ray to refract, return has no physical meaning.
-  return k < 0 ? (vec3){1.f, 0.f, 0.f} : (vec3){I->x * eta + N->x * tmp, 
+  // k < 0 = total reflection, no ray to refract
+  return k < 0 ? (vec3){0.f, 0.f, 0.f} : (vec3){I->x * eta + N->x * tmp, 
                                                 I->y * eta + N->y * tmp, 
                                                 I->z * eta + N->z * tmp};
 }
